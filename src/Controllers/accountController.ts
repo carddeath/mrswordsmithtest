@@ -1,24 +1,15 @@
 import { Response, Request, NextFunction } from "express";
-import User, {
-  userRepository,
-} from "../AccountManagementAPI/Repository/User.js";
-
-export const getAllUsers = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  let users = await userRepository.search().return.all();
-  res.send(users);
-};
+import { randomUUID } from "crypto";
+import { db } from "../AccountManagementAPI/Repository/UserRepository.js";
+import { User } from "../AccountManagementAPI/Models/User.js";
 
 export const getUser = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  const user = await userRepository.fetch(req.params.id);
-  res.status(200).json({ user });
+  const user = db.data.users.find((u: User) => u.id === req.params.id);
+  res.status(200).json({ user: user });
 };
 
 export const createUser = async (
@@ -26,10 +17,13 @@ export const createUser = async (
   res: Response,
   next: NextFunction
 ) => {
-  const user: User = userRepository.createEntity(req.body);
-  const id = await userRepository.save(user);
+  const newUser: User = { id: randomUUID(), ...req.body };
 
-  res.status(201).json({ id });
+  db.data.users.push(newUser);
+  db.write();
+  res
+    .status(201)
+    .json({ user: db.data.users.find((u: User) => u.id === newUser.id) });
 };
 
 export const updateUser = async (
@@ -37,20 +31,26 @@ export const updateUser = async (
   res: Response,
   next: NextFunction
 ) => {
-  //NOTE - Apologies about the ts-ignore here I was using an old library and types seem to be an issue on entities
-  const newDetails: User = req.body;
-  const user = await userRepository.fetch(req.params.id);
-  //@ts-ignore
-  user.name = newDetails.name ?? user.name;
-  //@ts-ignore
-  user.address = newDetails.address ?? user.address;
-  //@ts-ignore
-  user.email = newDetails.email ?? user.email;
-  //@ts-ignore
-  user.phoneNumber = newDetails.phoneNumber ?? user.phoneNumber;
+  const existingUser = db.data.users.find((u: User) => u.id === req.params.id);
+  const existingUserIndex = db.data.users.findIndex(
+    (u: User) => u.id === req.params.id
+  );
+  const newDetails = req.body;
 
-  const id = await userRepository.save(user);
-  res.status(200).json({ id });
+  if (existingUser) {
+    existingUser.name = newDetails.name ?? existingUser.name;
+    existingUser.address = newDetails.address ?? existingUser.address;
+    existingUser.email = newDetails.email ?? existingUser.email;
+    existingUser.phoneNumber =
+      newDetails.phoneNumber ?? existingUser.phoneNumber;
+    db.data.users[existingUserIndex] = existingUser;
+    db.write();
+    res.status(200).json({
+      updatedUser: db.data.users.find((u: User) => u.id === existingUser.id),
+    });
+  } else {
+    res.status(204).json({ msg: `No user with id: ${req.params.id}` });
+  }
 };
 
 export const deleteUser = async (
@@ -58,7 +58,13 @@ export const deleteUser = async (
   res: Response,
   next: NextFunction
 ) => {
-  await userRepository.remove(req.params.id);
+  const allUsers: Array<User> = db.data.users;
+  const usersWithDeletion: Array<User> = allUsers.filter(
+    (user) => user.id !== req.params.id
+  );
 
-  res.status(200).json({ msg: "Deleted User" });
+  db.data.users = usersWithDeletion;
+  db.write();
+
+  res.status(204).json({ msg: "Deleted User" });
 };

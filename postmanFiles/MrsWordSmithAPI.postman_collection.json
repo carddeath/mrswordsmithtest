@@ -33,7 +33,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"name\": \"Updated Name\"\r\n}",
+					"raw": "{\r\n    \"name\": \"Name Updated\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
